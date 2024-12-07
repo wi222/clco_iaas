@@ -1,0 +1,11 @@
+name: A8
+description: CLCO Exercise A8
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: ..\venv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: azure-python
