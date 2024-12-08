@@ -1,6 +1,5 @@
 import pulumi
 import pulumi_azure_native as azure_native
-import pulumi
 import uuid
 from pulumi_azure_native import resources, network, compute, storage, operationalinsights, insights, authorization
 import pulumi_azuread as azuread
@@ -19,7 +18,7 @@ user_matthias = azuread.get_user(user_principal_name=email_matthias)
 
 def assign_reader_role(user_object_id, resource_group, role_name_suffix):
     reader_role_definition_id = (
-        f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization/"
+        f"/subscriptions/6af93ac4-5014-406c-b711-f718798bb0ae/providers/Microsoft.Authorization/"
         "roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
     )
     role_assignment_name = str(uuid.uuid4())
@@ -34,8 +33,8 @@ def assign_reader_role(user_object_id, resource_group, role_name_suffix):
     )
     return role_assignment.id
 
-#role_assignment_id_gregoire = assign_reader_role(user_gregoire.object_id, resource_group, "gregoire")
-#role_assignment_id_matthias = assign_reader_role(user_matthias.object_id, resource_group, "matthias")
+role_assignment_id_gregoire = assign_reader_role(user_gregoire.object_id, resource_group, "gregoire")
+role_assignment_id_matthias = assign_reader_role(user_matthias.object_id, resource_group, "matthias")
 
 
 # Storage-Konto erstellen
