@@ -1,5 +1,4 @@
 config:
   A8:subscription_id: 6af93ac4-5014-406c-b711-f718798bb0ae
   azure-native:location: uksouth
-  log_analytics:shared_key:
-    secure: AAABADjj085EnteU4C0V5uPdmJjgjX50qh16+Q/83HnqXLbLLNLFmOslRfLyq6nCzuEAHBCL22Qh7xm7yjmlxosYG8A=
+  A8:readerRoleDefinitionId: acdd72a7-3385-48ef-bd42-f606fba81ae7
