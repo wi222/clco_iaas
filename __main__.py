@@ -12,22 +12,18 @@ email_gregoire = "wi22b060@technikum-wien.at"
 email_matthias = "wi22b112@technikum-wien.at"
 
 # Ressourcengruppe erstellen
-resource_group = azure_native.resources.ResourceGroup("A8ResourceGroup", resource_group_name="A8ResourceGroup")
+resource_group = azure_native.resources.ResourceGroup("IaaSResourceGroup", resource_group_name="IaaSResourceGroup")
 user_gregoire = azuread.get_user(user_principal_name=email_gregoire)
 user_matthias = azuread.get_user(user_principal_name=email_matthias)
 
 def assign_reader_role(user_object_id, resource_group, role_name_suffix):
-    reader_role_definition_id = (
-        f"/subscriptions/6af93ac4-5014-406c-b711-f718798bb0ae/providers/Microsoft.Authorization/"
-        "roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7"
-    )
     role_assignment_name = str(uuid.uuid4())
     role_assignment = authorization.RoleAssignment(
         f"readerRoleAssignment-{role_name_suffix}-{role_assignment_name}",
         scope=resource_group.id,
         role_assignment_name=role_assignment_name,
         principal_id=user_object_id,
-        role_definition_id=reader_role_definition_id,
+        role_definition_id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/providers/Microsoft.Authorization/roleDefinitions/{pulumi.Config().require('readerRoleDefinitionId')}",
         principal_type="User",
         opts=pulumi.ResourceOptions(ignore_changes=["role_definition_id"])
     )
@@ -63,7 +59,7 @@ virtual_network = azure_native.network.VirtualNetwork("vnet",
     address_space=azure_native.network.AddressSpaceArgs(
         address_prefixes=["10.0.0.0/16"]
     ))
-
+# Subnetz erstellen
 subnet = azure_native.network.Subnet("subnet",
     resource_group_name=resource_group.name,
     virtual_network_name=virtual_network.name,
@@ -93,7 +89,7 @@ security_rule = azure_native.network.SecurityRule("allow80InboundRule",
 public_ip = azure_native.network.PublicIPAddress(
     "publicIP",
     resource_group_name=resource_group.name,
-    public_ip_address_name="A8PublicIP",
+    public_ip_address_name="IaaSPublicIP",
     sku=azure_native.network.PublicIPAddressSkuArgs(name="Standard"),
     public_ip_allocation_method="Static",
     zones=["1", "2", "3"]
@@ -102,8 +98,8 @@ public_ip = azure_native.network.PublicIPAddress(
 # Load Balancer erstellen
 load_balancer = azure_native.network.LoadBalancer("loadBalancer",
     resource_group_name=resource_group.name,
-    location=azure_location,  # Ensure the region is consistent
-    load_balancer_name="A8LoadBalancer",
+    location=azure_location,  
+    load_balancer_name="IaaSLoadBalancer",
     sku=azure_native.network.LoadBalancerSkuArgs(name="Standard"),
     frontend_ip_configurations=[azure_native.network.FrontendIPConfigurationArgs(
         name="myFrontEnd",
@@ -123,13 +119,13 @@ load_balancer = azure_native.network.LoadBalancer("loadBalancer",
     load_balancing_rules=[azure_native.network.LoadBalancingRuleArgs(
         name="httpRule",
         frontend_ip_configuration=azure_native.network.SubResourceArgs(
-            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/A8ResourceGroup/providers/Microsoft.Network/loadBalancers/A8LoadBalancer/frontendIPConfigurations/myFrontEnd"
+            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/IaaSResourceGroup/providers/Microsoft.Network/loadBalancers/IaaSLoadBalancer/frontendIPConfigurations/myFrontEnd"
         ),
         backend_address_pool=azure_native.network.SubResourceArgs(
-            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/A8ResourceGroup/providers/Microsoft.Network/loadBalancers/A8LoadBalancer/backendAddressPools/myBackEndPool"
+            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/IaaSResourceGroup/providers/Microsoft.Network/loadBalancers/IaaSLoadBalancer/backendAddressPools/myBackEndPool"
         ),
         probe=azure_native.network.SubResourceArgs(
-            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/A8ResourceGroup/providers/Microsoft.Network/loadBalancers/A8LoadBalancer/probes/httpProbe"
+            id=f"/subscriptions/{pulumi.Config().require('subscription_id')}/resourceGroups/IaaSResourceGroup/providers/Microsoft.Network/loadBalancers/IaaSLoadBalancer/probes/httpProbe"
         ),
         protocol="Tcp",
         frontend_port=80,
@@ -139,7 +135,20 @@ load_balancer = azure_native.network.LoadBalancer("loadBalancer",
         load_distribution="Default"
     )])
 
-# Define VM settings
+action_group = azure_native.insights.ActionGroup(
+    "ActionGroup",
+    resource_group_name=resource_group.name,
+    location="global",
+    action_group_name="ActionGroup",
+    group_short_name="AG",
+    email_receivers=[azure_native.insights.EmailReceiverArgs(
+        name="ADMIN",
+        email_address="wi22b060@technikum-wien.at",
+        use_common_alert_schema=True
+    )]
+)
+
+# VM-Einstellungen definieren
 vm_names = ["vm1", "vm2"]
 admin_username = "azureuser"
 admin_password = "Password@1234"
@@ -151,7 +160,7 @@ image_reference = azure_native.compute.ImageReferenceArgs(
 )
 
 for idx, vm_name in enumerate(vm_names):
-    # Create Network Interface
+    # Network Interface erstellen
     nic = azure_native.network.NetworkInterface(f"nic-{vm_name}",
         resource_group_name=resource_group.name,
         ip_configurations=[azure_native.network.NetworkInterfaceIPConfigurationArgs(
@@ -165,7 +174,7 @@ for idx, vm_name in enumerate(vm_names):
         network_security_group=azure_native.network.SubResourceArgs(id=network_security_group.id)
     )
 
-    # Create Data Disk
+    # Data Disk erstellen
     data_disk = azure_native.compute.Disk(f"dataDisk-{vm_name}",
         resource_group_name=resource_group.name,
         location=resource_group.location,
@@ -175,7 +184,7 @@ for idx, vm_name in enumerate(vm_names):
         creation_data=azure_native.compute.CreationDataArgs(create_option="Empty")
     )
 
-    # Create Virtual Machine
+    # Virtual Machine erstellen
     vm = azure_native.compute.VirtualMachine(vm_name,
         resource_group_name=resource_group.name,
         network_profile=azure_native.compute.NetworkProfileArgs(
@@ -206,7 +215,7 @@ for idx, vm_name in enumerate(vm_names):
         )
     )
 
-    # Create Virtual Machine Extension
+    # Virtual Machine Extension erstellen
     vm_extension = azure_native.compute.VirtualMachineExtension(f"{vm_name}Extension",
         resource_group_name=resource_group.name,
         vm_name=vm.name,
@@ -247,11 +256,15 @@ for idx, vm_name in enumerate(vm_names):
                 )
             ]
         ),
-        actions=[],
+        actions=[
+            azure_native.insights.MetricAlertActionArgs(
+                action_group_id=action_group.id
+            )
+        ] ,
         opts=pulumi.ResourceOptions(depends_on=[vm])
     )
 
-
+# Aktivitätsprotokolle
 activity_logs = insights.DiagnosticSetting(
     "activityLogDiagnostics",
     resource_uri=f"/subscriptions/{pulumi.Config().require('subscription_id')}",
@@ -274,11 +287,8 @@ activity_logs = insights.DiagnosticSetting(
     ],
      metrics=[],
     workspace_id=log_analytics_workspace.id,
-    opts=pulumi.ResourceOptions(depends_on=[log_analytics_workspace])  # Ensure dependency
+    opts=pulumi.ResourceOptions(depends_on=[log_analytics_workspace]) 
 )
 
 
-
-# Exportieren der Ergebnisse
 pulumi.export("publicIpAddress", public_ip.ip_address)
-pulumi.export("logAnalyticsWorkspaceId", log_analytics_workspace.id)
